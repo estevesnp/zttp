@@ -55,10 +55,13 @@ fn handleConn(allocator: mem.Allocator, stream: net.Stream) void {
     };
     defer request.deinit();
 
-    std.io.getStdOut().writer().print(
+    const stdout = std.io.getStdOut().writer();
+
+    stdout.print(
         \\Method: {s}
         \\Url: {s}
         \\Version: {s}
+        \\Headers:
         \\
     ,
         .{
@@ -67,6 +70,30 @@ fn handleConn(allocator: mem.Allocator, stream: net.Stream) void {
             request.version,
         },
     ) catch {};
+
+    var header_iter = request.headers.iterator();
+    while (header_iter.next()) |entry| {
+        stdout.print("  {s}: ", .{entry.key_ptr.*}) catch {};
+
+        const header_len = entry.value_ptr.items.len;
+        for (entry.value_ptr.items, 0..) |val, idx| {
+            stdout.print("{s}", .{val}) catch {};
+            if (idx < header_len - 1) {
+                stdout.print(", ", .{}) catch {};
+            }
+        }
+
+        stdout.print("\n", .{}) catch {};
+    }
+
+    const body = request.parseBody() catch |err| {
+        std.debug.print("Error parsing body: {s}\n", .{@errorName(err)});
+        return;
+    };
+
+    if (body.len > 0) {
+        stdout.print("Body: {s}\n", .{body}) catch {};
+    }
 
     resp.write(stream, resp.Status.SC_OK) catch |err| {
         std.debug.print("Error writing response: {s}\n", .{@errorName(err)});

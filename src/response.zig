@@ -16,7 +16,7 @@ pub fn write(stream: net.Stream, status: Status) !void {
     const writer = buf_writer.writer();
 
     try writer.print(
-        "HTTP/1.1 {d} {s}\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 {d} {s}\r\nContent-Length: 0\r\n\r\n",
         .{ status.code, status.msg },
     );
     try buf_writer.flush();
