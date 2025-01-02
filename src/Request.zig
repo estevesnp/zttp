@@ -3,9 +3,20 @@ const net = std.net;
 const io = std.io;
 const mem = std.mem;
 const fmt = std.fmt;
+
 const StreamReader = io.Reader(net.Stream, net.Stream.ReadError, net.Stream.read);
 const BodyReader = io.BufferedReader(4096, StreamReader);
 const Headers = std.StringHashMapUnmanaged(std.ArrayListUnmanaged([]const u8));
+
+const Request = @This();
+
+// TODO - parse form and path params
+method: Method,
+url: []const u8,
+version: []const u8,
+headers: Headers,
+body_reader: BodyReader,
+arena: std.heap.ArenaAllocator,
 
 const req_line_limit = 8192;
 
@@ -29,46 +40,11 @@ const Method = enum {
     DELETE,
 };
 
-// TODO - parse form and path params
-const Request = struct {
-    method: Method,
-    url: []const u8,
-    version: []const u8,
-    headers: Headers,
-    body_reader: BodyReader,
-    arena: std.heap.ArenaAllocator,
+pub fn deinit(self: *Request) void {
+    self.arena.deinit();
+}
 
-    pub fn deinit(self: *Request) void {
-        self.arena.deinit();
-    }
-
-    pub fn parseBody(self: *Request) ![]const u8 {
-        const allocator = self.arena.allocator();
-        const reader = self.body_reader.reader();
-
-        const content_length = blk: {
-            const cont_list = self.headers.get("Content-Length") orelse return "";
-            if (cont_list.items.len != 1) return ParseBodyError.BadLengthHeader;
-            break :blk fmt.parseInt(usize, cont_list.items[0], 10) catch
-                return ParseBodyError.BadLengthHeader;
-        };
-
-        var buf = try allocator.alloc(u8, content_length);
-        var total_read: usize = 0;
-
-        while (total_read < content_length) {
-            const bytes_read = try reader.read(buf[total_read..]);
-            if (bytes_read == 0) {
-                return ParseBodyError.TooSmall;
-            }
-            total_read += bytes_read;
-        }
-
-        return buf;
-    }
-};
-
-pub fn parseRequest(parent_allocator: mem.Allocator, stream: net.Stream) !Request {
+pub fn parse(parent_allocator: mem.Allocator, stream: net.Stream) !Request {
     var arena = std.heap.ArenaAllocator.init(parent_allocator);
 
     const allocator = arena.allocator();
@@ -113,4 +89,29 @@ pub fn parseRequest(parent_allocator: mem.Allocator, stream: net.Stream) !Reques
         .body_reader = buf_reader,
         .arena = arena,
     };
+}
+
+pub fn parseBody(self: *Request) ![]const u8 {
+    const allocator = self.arena.allocator();
+    const reader = self.body_reader.reader();
+
+    const content_length = blk: {
+        const cont_list = self.headers.get("Content-Length") orelse return "";
+        if (cont_list.items.len != 1) return ParseBodyError.BadLengthHeader;
+        break :blk fmt.parseInt(usize, cont_list.items[0], 10) catch
+            return ParseBodyError.BadLengthHeader;
+    };
+
+    var buf = try allocator.alloc(u8, content_length);
+    var total_read: usize = 0;
+
+    while (total_read < content_length) {
+        const bytes_read = try reader.read(buf[total_read..]);
+        if (bytes_read == 0) {
+            return ParseBodyError.TooSmall;
+        }
+        total_read += bytes_read;
+    }
+
+    return buf;
 }

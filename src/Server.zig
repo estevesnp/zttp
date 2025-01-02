@@ -2,8 +2,8 @@ const std = @import("std");
 const net = std.net;
 const mem = std.mem;
 
-const req = @import("request.zig");
-const resp = @import("response.zig");
+const Request = @import("Request.zig");
+const Response = @import("Response.zig");
 
 const Server = @This();
 
@@ -49,7 +49,7 @@ pub fn listen(self: *Server) !void {
 fn handleConn(allocator: mem.Allocator, stream: net.Stream) void {
     defer stream.close();
 
-    var request = req.parseRequest(allocator, stream) catch |err| {
+    var request = Request.parse(allocator, stream) catch |err| {
         std.debug.print("Error parsing request: {s}\n", .{@errorName(err)});
         return;
     };
@@ -95,7 +95,15 @@ fn handleConn(allocator: mem.Allocator, stream: net.Stream) void {
         stdout.print("Body: {s}\n", .{body}) catch {};
     }
 
-    resp.write(stream, resp.Status.SC_OK) catch |err| {
+    var resp = Response.init(allocator);
+    defer resp.deinit();
+
+    resp.addHeader("Test-Header", "First") catch {};
+    resp.addHeader("Test-Header", "Second") catch {};
+    resp.body = "my little message";
+    resp.status_code = .{ .code = 201, .msg = "Created" };
+
+    resp.write(stream) catch |err| {
         std.debug.print("Error writing response: {s}\n", .{@errorName(err)});
         return;
     };
