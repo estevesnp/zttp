@@ -5,11 +5,16 @@ const mem = std.mem;
 const Request = @import("Request.zig");
 const Response = @import("Response.zig");
 
+const HandlerFn = *const fn (*Request, *Response) anyerror!void;
+const HandleMap = std.StringHashMapUnmanaged(HandlerFn);
+
 const Server = @This();
 
+// TODO - add middleware
 listener: net.Server,
 pool: *std.Thread.Pool,
 allocator: std.mem.Allocator,
+handles: HandleMap = .{},
 
 const Config = struct {
     addr: []const u8 = "127.0.0.1",
@@ -35,18 +40,26 @@ pub fn init(allocator: mem.Allocator, config: Config) !Server {
 pub fn deinit(self: *Server) void {
     self.pool.deinit();
     self.allocator.destroy(self.pool);
+    self.handles.deinit(self.allocator);
     self.listener.deinit();
+}
+
+pub fn registerHandle(self: *Server, path: []const u8, handler: HandlerFn) !void {
+    const gop = try self.handles.getOrPut(self.allocator, path);
+    if (gop.found_existing) {
+        std.debug.panic("A handler has already been registered for '{s}'", .{path});
+    }
+    gop.value_ptr.* = handler;
 }
 
 pub fn listen(self: *Server) !void {
     while (true) {
         const conn = try self.listener.accept();
-        try self.pool.spawn(handleConn, .{ self.allocator, conn.stream });
+        try self.pool.spawn(handleConn, .{ self.allocator, &self.handles, conn.stream });
     }
 }
 
-// TODO - create handle registering
-fn handleConn(allocator: mem.Allocator, stream: net.Stream) void {
+fn handleConn(allocator: mem.Allocator, handles: *HandleMap, stream: net.Stream) void {
     defer stream.close();
 
     var request = Request.parse(allocator, stream) catch |err| {
@@ -55,55 +68,24 @@ fn handleConn(allocator: mem.Allocator, stream: net.Stream) void {
     };
     defer request.deinit();
 
-    const stdout = std.io.getStdOut().writer();
+    var response = Response.init(allocator);
+    defer response.deinit();
 
-    stdout.print(
-        \\Method: {s}
-        \\Url: {s}
-        \\Version: {s}
-        \\Headers:
-        \\
-    ,
-        .{
-            @tagName(request.method),
-            request.url,
-            request.version,
-        },
-    ) catch {};
+    const action = handles.get(request.url) orelse {
+        response.status_code = Response.StatusCode.SC_NOT_FOUND;
+        response.body = "404 page not found\n";
 
-    var header_iter = request.headers.iterator();
-    while (header_iter.next()) |entry| {
-        stdout.print("  {s}: ", .{entry.key_ptr.*}) catch {};
-
-        const header_len = entry.value_ptr.items.len;
-        for (entry.value_ptr.items, 0..) |val, idx| {
-            stdout.print("{s}", .{val}) catch {};
-            if (idx < header_len - 1) {
-                stdout.print(", ", .{}) catch {};
-            }
-        }
-
-        stdout.print("\n", .{}) catch {};
-    }
-
-    const body = request.parseBody() catch |err| {
-        std.debug.print("Error parsing body: {s}\n", .{@errorName(err)});
+        response.write(stream) catch |err| {
+            std.debug.print("Error writing response: {s}\n", .{@errorName(err)});
+        };
         return;
     };
 
-    if (body.len > 0) {
-        stdout.print("Body: {s}\n", .{body}) catch {};
-    }
+    action(&request, &response) catch |err| {
+        std.debug.print("Error handling request for {s}: {}", .{ request.url, err });
+    };
 
-    var resp = Response.init(allocator);
-    defer resp.deinit();
-
-    resp.addHeader("Test-Header", "First") catch {};
-    resp.addHeader("Test-Header", "Second") catch {};
-    resp.body = "my little message";
-    resp.status_code = .{ .code = 201, .msg = "Created" };
-
-    resp.write(stream) catch |err| {
+    response.write(stream) catch |err| {
         std.debug.print("Error writing response: {s}\n", .{@errorName(err)});
         return;
     };

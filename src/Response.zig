@@ -8,7 +8,7 @@ const StreamWriter = io.Writer(net.Stream, net.Stream.WriteError, net.Stream.wri
 const Response = @This();
 
 status_code: StatusCode = StatusCode.SC_OK,
-headers: Headers = Headers{},
+headers: Headers = .{},
 body: []const u8 = "",
 written: bool = false,
 arena: std.heap.ArenaAllocator,
