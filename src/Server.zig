@@ -19,7 +19,7 @@ handles: HandleMap = .{},
 const Config = struct {
     addr: []const u8 = "127.0.0.1",
     port: u16,
-    n_jobs: ?u32 = null,
+    n_jobs: ?usize = null,
 };
 
 pub fn init(allocator: mem.Allocator, config: Config) !Server {

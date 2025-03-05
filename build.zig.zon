@@ -1,7 +1,9 @@
 .{
-    .name = "zttp",
+    .name = .zttp,
 
     .version = "0.0.0",
+
+    .fingerprint = 0x6d6892a6fe198ec6,
 
     .dependencies = .{},
 

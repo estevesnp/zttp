@@ -2,12 +2,12 @@ const std = @import("std");
 const zttp = @import("zttp");
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
+    var dpa: std.heap.DebugAllocator(.{}) = .init;
+    defer _ = dpa.deinit();
 
-    const allocator = gpa.allocator();
+    const allocator = dpa.allocator();
 
-    var server = try zttp.Server.init(allocator, .{ .port = 8080 });
+    var server: zttp.Server = try .init(allocator, .{ .port = 8080 });
     defer server.deinit();
 
     try server.registerHandle("/", printHeadersAndBody);
