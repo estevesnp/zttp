@@ -8,7 +8,7 @@ const StreamWriter = io.Writer(net.Stream, net.Stream.WriteError, net.Stream.wri
 const Response = @This();
 
 status_code: StatusCode = StatusCode.SC_OK,
-headers: Headers = .{},
+headers: Headers = .empty,
 body: []const u8 = "",
 written: bool = false,
 arena: std.heap.ArenaAllocator,
@@ -35,7 +35,7 @@ pub fn addHeader(self: *Response, key: []const u8, value: []const u8) !void {
 
     const gop = try self.headers.getOrPut(allocator, key);
     if (!gop.found_existing) {
-        gop.value_ptr.* = std.ArrayListUnmanaged([]const u8){};
+        gop.value_ptr.* = std.ArrayListUnmanaged([]const u8).empty;
     }
 
     try gop.value_ptr.append(allocator, value);

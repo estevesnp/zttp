@@ -63,7 +63,7 @@ pub fn parse(parent_allocator: mem.Allocator, stream: net.Stream) !Request {
     const url = star_iter.next() orelse return RequestParseError.BadUrl;
     const version = star_iter.next() orelse return RequestParseError.BadVersion;
 
-    var headers = Headers{};
+    var headers: Headers = .empty;
 
     var header_line = try reader.readUntilDelimiterAlloc(allocator, '\n', req_line_limit);
     while (header_line.len > 1) {
@@ -74,7 +74,7 @@ pub fn parse(parent_allocator: mem.Allocator, stream: net.Stream) !Request {
 
         const gop = try headers.getOrPut(allocator, key);
         if (!gop.found_existing) {
-            gop.value_ptr.* = std.ArrayListUnmanaged([]const u8){};
+            gop.value_ptr.* = std.ArrayListUnmanaged([]const u8).empty;
         }
         try gop.value_ptr.append(allocator, val);
 

@@ -14,7 +14,7 @@ const Server = @This();
 listener: net.Server,
 pool: *std.Thread.Pool,
 allocator: std.mem.Allocator,
-handles: HandleMap = .{},
+handles: HandleMap = .empty,
 
 const Config = struct {
     addr: []const u8 = "127.0.0.1",
