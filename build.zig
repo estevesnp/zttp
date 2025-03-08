@@ -12,39 +12,39 @@ pub fn build(b: *std.Build) void {
     });
 
     {
-        const check_exe = b.addExecutable(.{
-            .name = "zttp",
-            .root_source_file = b.path("examples/simple_server.zig"),
+        const root_test = b.addTest(.{
+            .root_source_file = b.path("src/root.zig"),
             .target = target,
             .optimize = optimize,
         });
-        check_exe.root_module.addImport("zttp", module);
 
-        const check_step = b.step("check", "Check that the program compiles");
-        check_step.dependOn(&check_exe.step);
+        const run_root_test = b.addRunArtifact(root_test);
+
+        const check_step = b.step("check", "Check application compiles");
+        check_step.dependOn(&run_root_test.step);
     }
 
-    const exe = b.addExecutable(.{
+    const example_exe = b.addExecutable(.{
         .name = "zttp",
         .root_source_file = b.path("examples/simple_server.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    exe.root_module.addImport("zttp", module);
+    example_exe.root_module.addImport("zttp", module);
 
-    b.installArtifact(exe);
+    b.installArtifact(example_exe);
 
-    const run_cmd = b.addRunArtifact(exe);
+    const run_example_exe = b.addRunArtifact(example_exe);
 
-    run_cmd.step.dependOn(b.getInstallStep());
+    run_example_exe.step.dependOn(b.getInstallStep());
 
     if (b.args) |args| {
-        run_cmd.addArgs(args);
+        run_example_exe.addArgs(args);
     }
 
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    const run_step = b.step("run", "Run an example");
+    run_step.dependOn(&run_example_exe.step);
 
     const main_tests = b.addTest(.{
         .root_source_file = b.path("src/root.zig"),
