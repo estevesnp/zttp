@@ -12,11 +12,7 @@ pub fn build(b: *std.Build) void {
     });
 
     {
-        const root_test = b.addTest(.{
-            .root_source_file = b.path("src/root.zig"),
-            .target = target,
-            .optimize = optimize,
-        });
+        const root_test = b.addTest(.{ .root_module = module });
 
         const run_root_test = b.addRunArtifact(root_test);
 
@@ -26,9 +22,11 @@ pub fn build(b: *std.Build) void {
 
     const example_exe = b.addExecutable(.{
         .name = "zttp",
-        .root_source_file = b.path("examples/simple_server.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/simple_server.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     example_exe.root_module.addImport("zttp", module);
@@ -46,11 +44,7 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run an example");
     run_step.dependOn(&run_example_exe.step);
 
-    const main_tests = b.addTest(.{
-        .root_source_file = b.path("src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+    const main_tests = b.addTest(.{ .root_module = module });
 
     const test_step = b.step("test", "Run library tests");
     test_step.dependOn(&main_tests.step);

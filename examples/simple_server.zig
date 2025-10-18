@@ -2,12 +2,12 @@ const std = @import("std");
 const zttp = @import("zttp");
 
 pub fn main() !void {
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
-    defer _ = gpa.deinit();
+    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+    defer _ = debug_allocator.deinit();
 
-    const allocator = gpa.allocator();
+    const gpa = debug_allocator.allocator();
 
-    var server: zttp.Server = try .init(allocator, .{ .port = 8080 });
+    var server: zttp.Server = try .init(gpa, .{ .port = 8080 });
     defer server.deinit();
 
     try server.registerHandle("/", printHeadersAndBody);
@@ -23,7 +23,9 @@ fn pingHandle(_: *zttp.Request, resp: *zttp.Response) !void {
 }
 
 fn printHeadersAndBody(req: *zttp.Request, resp: *zttp.Response) !void {
-    const stdout = std.io.getStdOut().writer();
+    var buf: [1024]u8 = undefined;
+    var bw = std.fs.File.stdout().writer(&buf);
+    const stdout = &bw.interface;
 
     try stdout.print(
         \\
@@ -62,6 +64,7 @@ fn printHeadersAndBody(req: *zttp.Request, resp: *zttp.Response) !void {
     }
 
     try stdout.print("\n", .{});
+    try stdout.flush();
 
     try resp.addHeader("Test-Header", "First");
     try resp.addHeader("Test-Header", "Second");

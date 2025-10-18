@@ -62,20 +62,28 @@ pub fn listen(self: *Server) !void {
 fn handleConn(allocator: mem.Allocator, handles: *HandleMap, stream: net.Stream) void {
     defer stream.close();
 
-    var request = Request.parse(allocator, stream) catch |err| {
+    var req_buf: [1024]u8 = undefined;
+    var br = stream.reader(&req_buf);
+    const request_reader = &br.interface_state;
+
+    var resp_buf: [1024]u8 = undefined;
+    var bw = stream.writer(&resp_buf);
+    const response_writer = &bw.interface;
+
+    var request = Request.parse(allocator, request_reader) catch |err| {
         std.debug.print("Error parsing request: {s}\n", .{@errorName(err)});
         return;
     };
     defer request.deinit();
 
-    var response = Response.init(allocator);
+    var response = Response.init(allocator, response_writer);
     defer response.deinit();
 
     const action = handles.get(request.url) orelse {
         response.status_code = Response.StatusCode.SC_NOT_FOUND;
         response.body = "404 page not found\n";
 
-        response.write(stream) catch |err| {
+        response.write() catch |err| {
             std.debug.print("Error writing response: {s}\n", .{@errorName(err)});
         };
         return;
@@ -85,7 +93,7 @@ fn handleConn(allocator: mem.Allocator, handles: *HandleMap, stream: net.Stream)
         std.debug.print("Error handling request for {s}: {}", .{ request.url, err });
     };
 
-    response.write(stream) catch |err| {
+    response.write() catch |err| {
         std.debug.print("Error writing response: {s}\n", .{@errorName(err)});
         return;
     };

@@ -1,9 +1,8 @@
 const std = @import("std");
 const net = std.net;
-const io = std.io;
+const Io = std.Io;
 
 const Headers = std.StringHashMapUnmanaged(std.ArrayListUnmanaged([]const u8));
-const StreamWriter = io.Writer(net.Stream, net.Stream.WriteError, net.Stream.write);
 
 const Response = @This();
 
@@ -12,6 +11,7 @@ headers: Headers = .empty,
 body: []const u8 = "",
 written: bool = false,
 arena: std.heap.ArenaAllocator,
+response_writer: *Io.Writer,
 
 pub const StatusCode = struct {
     code: u16,
@@ -22,8 +22,11 @@ pub const StatusCode = struct {
     pub const SC_INTERNAL_SERVER_ERROR: StatusCode = .{ .code = 500, .msg = "Internal Server Error" };
 };
 
-pub fn init(parent_allocator: std.mem.Allocator) Response {
-    return .{ .arena = std.heap.ArenaAllocator.init(parent_allocator) };
+pub fn init(parent_allocator: std.mem.Allocator, response_writer: *Io.Writer) Response {
+    return .{
+        .arena = std.heap.ArenaAllocator.init(parent_allocator),
+        .response_writer = response_writer,
+    };
 }
 
 pub fn deinit(self: *Response) void {
@@ -41,37 +44,34 @@ pub fn addHeader(self: *Response, key: []const u8, value: []const u8) !void {
     try gop.value_ptr.append(allocator, value);
 }
 
-pub fn write(self: *Response, stream: net.Stream) !void {
+pub fn write(self: *Response) !void {
     if (self.written) return;
 
     self.written = true;
 
-    var buf_writer = io.bufferedWriter(stream.writer());
-    const writer = buf_writer.writer();
-
-    try writer.print("HTTP/1.1 {d} {s}\r\n", .{ self.status_code.code, self.status_code.msg });
+    try self.response_writer.print("HTTP/1.1 {d} {s}\r\n", .{ self.status_code.code, self.status_code.msg });
 
     var header_it = self.headers.iterator();
     while (header_it.next()) |entry| {
-        try writer.print("{s}: ", .{entry.key_ptr.*});
+        try self.response_writer.print("{s}: ", .{entry.key_ptr.*});
         for (entry.value_ptr.items, 0..) |value, idx| {
             if (idx < entry.value_ptr.items.len - 1) {
-                try writer.print("{s}, ", .{value});
+                try self.response_writer.print("{s}, ", .{value});
                 continue;
             }
-            try writer.print("{s}\r\n", .{value});
+            try self.response_writer.print("{s}\r\n", .{value});
         }
     }
 
     if (self.headers.get("Content-Length") == null) {
-        try writer.print("Content-Length: {d}\r\n", .{self.body.len});
+        try self.response_writer.print("Content-Length: {d}\r\n", .{self.body.len});
     }
 
-    try writer.writeAll("\r\n");
+    try self.response_writer.writeAll("\r\n");
 
     if (self.body.len > 0) {
-        try writer.writeAll(self.body);
+        try self.response_writer.writeAll(self.body);
     }
 
-    try buf_writer.flush();
+    try self.response_writer.flush();
 }

@@ -1,11 +1,9 @@
 const std = @import("std");
 const net = std.net;
-const io = std.io;
+const Io = std.Io;
 const mem = std.mem;
 const fmt = std.fmt;
 
-const StreamReader = io.Reader(net.Stream, net.Stream.ReadError, net.Stream.read);
-const BodyReader = io.BufferedReader(4096, StreamReader);
 const Headers = std.StringHashMapUnmanaged(std.ArrayListUnmanaged([]const u8));
 
 const Request = @This();
@@ -15,7 +13,7 @@ method: Method,
 url: []const u8,
 version: []const u8,
 headers: Headers,
-body_reader: BodyReader,
+body_reader: *Io.Reader,
 arena: std.heap.ArenaAllocator,
 
 const req_line_limit = 8192;
@@ -44,13 +42,12 @@ pub fn deinit(self: *Request) void {
     self.arena.deinit();
 }
 
-pub fn parse(parent_allocator: mem.Allocator, stream: net.Stream) !Request {
+pub fn parse(parent_allocator: mem.Allocator, request_reader: *Io.Reader) !Request {
     var arena = std.heap.ArenaAllocator.init(parent_allocator);
 
     const allocator = arena.allocator();
 
-    var buf_reader = io.bufferedReader(stream.reader());
-    const reader = buf_reader.reader();
+    const reader = request_reader.adaptToOldInterface();
 
     const start_line = try reader.readUntilDelimiterAlloc(allocator, '\n', req_line_limit);
 
@@ -86,14 +83,14 @@ pub fn parse(parent_allocator: mem.Allocator, stream: net.Stream) !Request {
         .url = url,
         .version = version,
         .headers = headers,
-        .body_reader = buf_reader,
+        .body_reader = request_reader,
         .arena = arena,
     };
 }
 
 pub fn parseBody(self: *Request) ![]const u8 {
     const allocator = self.arena.allocator();
-    const reader = self.body_reader.reader();
+    const reader = self.body_reader.adaptToOldInterface();
 
     const content_length = blk: {
         const cont_list = self.headers.get("Content-Length") orelse return "";
