@@ -64,7 +64,7 @@ fn handleConn(allocator: mem.Allocator, handles: *HandleMap, stream: net.Stream)
 
     var req_buf: [1024]u8 = undefined;
     var br = stream.reader(&req_buf);
-    const request_reader = &br.interface_state;
+    const request_reader = br.interface();
 
     var resp_buf: [1024]u8 = undefined;
     var bw = stream.writer(&resp_buf);
